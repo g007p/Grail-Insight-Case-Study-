@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Lab 1: Line Chart</title>
+
+    <link rel="stylesheet" href="main.css">
+
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.7.4/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.7.1/d3-tip.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.24.0/d3-legend.js"></script>
+
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+</head>
+
+<body>
+   
+    <div class="jumbotron container-fluid">
+        <div class="container">
+            <h1>Population-Year</h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <p></p>
+        <svg id="viz"></svg>
+    </div>
+
+</body>
+<script>
+   
+    var margin = {
+        top: 10,
+        right: 220,
+        bottom: 50,
+        left: 80
+    };
+
+ 
+    var selectedCountries = ["United States of America", "Canada", "Spain","Bulgaria","Belgium","Turkey","Switzerland"];
+    var selectedData = [];
+
+  
+    var width = 960;
+    var height = 500;
+
+    
+    var drawWidth = width - margin.left - margin.right;
+    var drawHeight = height - margin.top - margin.bottom;
+
+
+    var svg = d3.select("svg")
+        .attr('width', width)
+        .attr('height', height);
+
+
+    var g = svg.append("g")
+        .attr('id', 'graph')
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var xAxisLabel = g.append("g")
+        .attr('transform', 'translate(0,' + drawHeight + ')')
+        .attr('class', 'axis')
+
+
+    g.append('text')
+        .attr('class', 'axis-label')
+        .attr('transform', 'translate(' + (drawWidth / 2) + ',' + (drawHeight + margin.top + 40) + ')')
+        .style('text-anchor', 'middle')
+        .text("Year")
+
+  
+    var yAxisLabel = g.append("g")
+        .attr('class', 'axis')
+
+    g.append('text')
+        .attr('class', 'axis-label')
+        .attr('transform', 'rotate(-90)')
+        .attr('y', 0 - margin.left)
+        .attr('x', 0 - (drawHeight / 2))
+        .attr('dy', '1em')
+        .style('text-anchor', 'middle')
+        .text("Population")
+
+    d3.csv('pops.csv', function(error, data) {
+
+
+        var dataByCountry = d3.nest()
+            .key(function(d) {
+                return d.country_area;
+            })
+            .entries(data);
+
+
+        function filterData() {
+            selectedData = dataByCountry.filter(function(d) {
+                return selectedCountries.indexOf(d.key) > -1
+            })
+        }
+
+        var colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+        var xFormat = d3.format("d");
+        var yFormat = d3.format('.2s')
+        var xScale = d3.scaleLinear();
+        var yScale = d3.scaleLinear();
+        var xAxis = d3.axisBottom().tickFormat(xFormat);
+        ;
+        var yAxis = d3.axisLeft().tickFormat(yFormat);
+
+
+        function setScales() {
+            var allValues = [];
+            selectedData.forEach(function(d) {
+                d.values.forEach(function(d) {
+                    allValues.push(+d.value);
+                });
+            });
+
+        
+            var xExtent = d3.extent(selectedData[0].values, function(d) {
+                return +d.year;
+            });
+            xScale.domain([xExtent[0], xExtent[1]]).rangeRound([0, drawWidth]);
+
+
+            var yExtent = d3.extent(allValues);
+            yScale.domain([yExtent[0] * 0.9, yExtent[1] * 1.1]).rangeRound([drawHeight, 0]);
+
+    
+            colorScale.domain(selectedCountries);
+        }
+
+        function setAxes() {
+            xAxis.scale(xScale);
+            yAxis.scale(yScale);
+
+            xAxisLabel.transition().duration(1000).call(xAxis);
+            yAxisLabel.transition().duration(1000).call(yAxis);
+        }
+
+
+        var line = d3.line()
+            .x(function(d) {
+                return xScale(+d.year)
+            })
+            .y(function(d) {
+                return yScale(+d.value)
+            });
+        function draw(data) {
+        
+            setScales();
+            setAxes();
+
+     
+            var countries = g.selectAll('.countries')
+                .data(data, function(d) {
+                    return d.key;
+                });
+            countries.enter().append("path")
+                .attr('class', 'countries')
+                .merge(countries)
+                .attr("d", function(d) {
+                    return line(d.values)
+                })
+                .attr("fill", "none")
+                .attr("stroke-width", 1.5)
+                .attr("stroke", function(d) {
+                    return colorScale(d.key)
+                });
+
+     
+            countries.enter().append('text')
+                .text((d) => d.key)
+                .attr('x', xScale.range()[1])
+                .attr('y', function(d){
+                    var value = d.values.filter(function(d){
+                        return d.year == xScale.domain()[1];
+                    });
+                    return yScale(value[0].value);
+                })
+                .style('fill', function(d){
+                    return colorScale(d.key)
+                })   
+
+            countries.exit()
+                .remove();
+        }
+
+
+        filterData();
+        draw(selectedData);
+        svg.append("g")
+            .attr("class", "legendOrdinal")
+            .attr("transform", "translate(" + (drawWidth + margin.left + 20) + ",200)");
+
+        var legendOrdinal = d3.legendColor()        
+            .shape("path", d3.symbol().type(d3.symbolTriangle).size(150)())        
+            .shapePadding(10)            
+            .scale(colorScale);
+
+        svg.select(".legendOrdinal")
+            .call(legendOrdinal);
+    });
+</script>
+
+</html>
